@@ -109,7 +109,6 @@ int main(int argc, char *argv[])
         first_imu[seq]--; // first imu measurement to be considered
 
     }
-
     // Vector for tracking time statistics
     vector<float> vTimesTrack;
     vTimesTrack.resize(tot_images);
@@ -119,6 +118,7 @@ int main(int argc, char *argv[])
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::IMU_MONOCULAR, true);
     float imageScale = SLAM.GetImageScale();
+    cout << "imageScale = " << imageScale << endl;
 
     double t_resize = 0.f;
     double t_track = 0.f;
@@ -191,7 +191,16 @@ int main(int argc, char *argv[])
     #endif
 
             // Pass the image to the SLAM system
-            // cout << "tframe = " << tframe << endl;
+            cout << "tframe = " << tframe << endl;
+            cout << "Tracking frame " << ni << " with " << vImuMeas.size() << " IMU measurements" << endl;
+            
+            // 详细打印TrackMonocular参数
+            cout << "=== MONO_INERTIAL_EUROC PARAMETERS ===" << endl;
+            cout << "Image size: " << im.cols << "x" << im.rows << ", Type: " << im.type() << endl;
+            cout << "Timestamp: " << tframe << " seconds" << endl;
+            cout << "IMU measurements: " << vImuMeas.size() << endl;
+            cout << "===================================" << endl;
+            
             SLAM.TrackMonocular(im,tframe,vImuMeas); // TODO change to monocular_inertial
 
     #ifdef COMPILEDWITHC11

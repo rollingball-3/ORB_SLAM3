@@ -4,7 +4,7 @@ project(ORB_SLAM3)
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
-
+add_compile_options(-std=c++14)
 MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
@@ -31,6 +31,11 @@ endif()
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
 find_package(OpenCV 4.4)
+   MESSAGE("OpenCV library status:")
+   MESSAGE("    version: ${OpenCV_VERSION}")
+   MESSAGE("    libraries: ${OpenCV_LIBS}")
+   MESSAGE("    include path: ${OpenCV_INCLUDE_DIRS}")
+
    if(NOT OpenCV_FOUND)
       message(FATAL_ERROR "OpenCV > 4.4 not found.")
    endif()
@@ -42,6 +47,26 @@ find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(realsense2)
 
+if(DEFINED ENV{CONDA_PREFIX})
+  set(HDF5_ROOT $ENV{CONDA_PREFIX})
+  message(STATUS "Using Conda environment for HDF5: ${HDF5_ROOT}")
+endif()
+
+find_package(OpenSSL REQUIRED)
+message(STATUS "OpenSSL found: ${OPENSSL_FOUND}")
+message(STATUS "OpenSSL include dir: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "OpenSSL libraries: ${OPENSSL_LIBRARIES}")
+
+find_package(HDF5 COMPONENTS CXX)
+if(HDF5_FOUND)
+  message(STATUS "HDF5 found:")
+  message(STATUS "    version: ${HDF5_VERSION}")
+  message(STATUS "    libraries: ${HDF5_LIBRARIES}")
+  message(STATUS "    include path: ${HDF5_INCLUDE_DIRS}")
+else()
+  message(WARNING "HDF5 library not found, Orbbec HDF5 example will not be built")
+endif()
+
 include_directories(
 ${PROJECT_SOURCE_DIR}
 ${PROJECT_SOURCE_DIR}/include
@@ -49,7 +74,12 @@ ${PROJECT_SOURCE_DIR}/include/CameraModels
 ${PROJECT_SOURCE_DIR}/Thirdparty/Sophus
 ${EIGEN3_INCLUDE_DIR}
 ${Pangolin_INCLUDE_DIRS}
+${OPENSSL_INCLUDE_DIR}
 )
+
+if(HDF5_FOUND)
+  include_directories(${HDF5_INCLUDE_DIRS})
+endif()
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
@@ -145,6 +175,19 @@ add_executable(rgbd_tum
         Examples/RGB-D/rgbd_tum.cc)
 target_link_libraries(rgbd_tum ${PROJECT_NAME})
 
+# Add Orbbec RGB-D H5 data reader
+if(HDF5_FOUND)
+    add_executable(orbbec_bgrd
+            Examples/RGB-D/orbbec_bgrd.cc)
+    target_link_libraries(orbbec_bgrd
+                ${PROJECT_NAME}
+                ${OpenCV_LIBS}
+                ${HDF5_LIBRARIES}
+                ${Pangolin_LIBRARIES}
+                ${OPENSSL_LIBRARIES}
+                -lcurl)
+endif()
+
 if(realsense2_FOUND)
     add_executable(rgbd_realsense_D435i
             Examples/RGB-D/rgbd_realsense_D435i.cc)
@@ -159,6 +202,18 @@ if(realsense2_FOUND)
     add_executable(rgbd_inertial_realsense_D435i
             Examples/RGB-D-Inertial/rgbd_inertial_realsense_D435i.cc)
     target_link_libraries(rgbd_inertial_realsense_D435i ${PROJECT_NAME})
+endif()
+
+if (HDF5_FOUND)
+        add_executable(orbbec_bgrd_inertial
+        Examples/RGB-D-Inertial/orbbec_bgrd_inertial.cc)
+        target_link_libraries(orbbec_bgrd_inertial
+        ${PROJECT_NAME}
+        ${OpenCV_LIBS}
+        ${HDF5_LIBRARIES}
+        ${Pangolin_LIBRARIES}
+        ${OPENSSL_LIBRARIES}
+        -lcurl)
 endif()
 
 #Stereo examples
@@ -221,6 +276,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular-Iner
 add_executable(mono_inertial_euroc
         Examples/Monocular-Inertial/mono_inertial_euroc.cc)
 target_link_libraries(mono_inertial_euroc ${PROJECT_NAME})
+
+add_executable(mono_inertial_orbbec
+        Examples/Monocular-Inertial/mono_inertial_orbbec.cc)
+target_link_libraries(mono_inertial_orbbec 
+                ${PROJECT_NAME}
+                ${OpenCV_LIBS}
+                ${HDF5_LIBRARIES}
+                ${Pangolin_LIBRARIES}
+                ${OPENSSL_LIBRARIES}
+                -lcurl)
 
 add_executable(mono_inertial_tum_vi
         Examples/Monocular-Inertial/mono_inertial_tum_vi.cc)

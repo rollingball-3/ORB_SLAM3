@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/Thirdparty/g2o",
+                "${workspaceFolder}/Thirdparty/g2o/**",
+                "${workspaceFolder}/Thirdparty/DBoW2",
+                "${workspaceFolder}/Thirdparty/DBoW2/**",
+                "${workspaceFolder}/Thirdparty/Sophus",
+                "${workspaceFolder}/Thirdparty/Sophus/**",
+                "/usr/include",
+                "/usr/local/include",
+                "/usr/include/opencv4",
+                "/data/qiufangzhou/miniconda3/include"
+            ],
+            "compilerPath": "/usr/bin/gcc-11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+} 
