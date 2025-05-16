@@ -1093,6 +1093,8 @@ namespace ORB_SLAM3
         Mat image = _image.getMat();
         assert(image.type() == CV_8UC1 );
 
+        // Get mask mat
+        Mat mask = _mask.getMat();
         // Pre-compute the scale pyramid
         ComputePyramid(image);
 
@@ -1139,7 +1141,6 @@ namespace ORB_SLAM3
 
             offset += nkeypointsLevel;
 
-
             float scale = mvScaleFactor[level]; //getScale(level, firstLevel, scaleFactor);
             int i = 0;
             for (vector<KeyPoint>::iterator keypoint = keypoints.begin(),
@@ -1150,20 +1151,51 @@ namespace ORB_SLAM3
                     keypoint->pt *= scale;
                 }
 
-                if(keypoint->pt.x >= vLappingArea[0] && keypoint->pt.x <= vLappingArea[1]){
-                    _keypoints.at(stereoIndex) = (*keypoint);
-                    desc.row(i).copyTo(descriptors.row(stereoIndex));
-                    stereoIndex--;
+                // Check if the keypoint is in the mask
+                bool inMask = true;
+                if(!mask.empty()) {
+                    // Scale the keypoint location to match mask dimensions
+                    int x = cvRound(keypoint->pt.x);
+                    int y = cvRound(keypoint->pt.y);
+                    
+                    // Check if the keypoint is within the mask dimensions
+                    if(x >= 0 && y >= 0 && x < mask.cols && y < mask.rows) {
+                        // If the mask value > 127 (white), exclude this point
+                        inMask = (mask.at<uchar>(y, x) > 127);
+                    }
                 }
-                else{
-                    _keypoints.at(monoIndex) = (*keypoint);
-                    desc.row(i).copyTo(descriptors.row(monoIndex));
-                    monoIndex++;
+                
+                // Only include keypoints that are not in the masked area
+                if(inMask) {
+                    if(keypoint->pt.x >= vLappingArea[0] && keypoint->pt.x <= vLappingArea[1]){
+                        _keypoints.at(stereoIndex) = (*keypoint);
+                        desc.row(i).copyTo(descriptors.row(stereoIndex));
+                        stereoIndex--;
+                    }
+                    else{
+                        _keypoints.at(monoIndex) = (*keypoint);
+                        desc.row(i).copyTo(descriptors.row(monoIndex));
+                        monoIndex++;
+                    }
                 }
                 i++;
             }
         }
-        //cout << "[ORBextractor]: extracted " << _keypoints.size() << " KeyPoints" << endl;
+        
+        // Adjust keypoints vector size if some keypoints were masked out
+        if(monoIndex <= stereoIndex) {
+            // All keypoints were masked or none were in the image
+            _keypoints.resize(monoIndex);
+            if(monoIndex > 0)
+                descriptors = descriptors.rowRange(0, monoIndex);
+        } else {
+            // Some keypoints were kept
+            _keypoints.resize(monoIndex + (nkeypoints - stereoIndex - 1));
+            if(_keypoints.size() > 0 && _keypoints.size() < nkeypoints)
+                descriptors = descriptors.rowRange(0, _keypoints.size());
+        }
+        
+        cout << "[ORBextractor]: extracted " << _keypoints.size() << " KeyPoints" << endl;
         return monoIndex;
     }
 

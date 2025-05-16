@@ -517,7 +517,7 @@ bool LoadOrbbecH5Data(const string &h5_path, OrbbecData &data) {
 
 int main(int argc, char **argv) {
     if (argc < 4) {
-        cerr << endl << "Usage: ./orbbec_rgbd_inertial_offline h5_file path_to_vocabulary path_to_settings [trajectory_file_name]" << endl;
+        cerr << endl << "Usage: ./orbbec_rgbd_inertial h5_file path_to_vocabulary path_to_settings [mask_file]" << endl;
         return 1;
     }
 
@@ -526,13 +526,38 @@ int main(int argc, char **argv) {
     string voc_path = argv[2];
     string settings_path = argv[3];
     
-    string trajectory_file = "";
-    bool save_trajectory = false;
-    
+    string mask_path = "";
+    bool use_mask = false;
+    cv::Mat mask;    
+
     if (argc == 5) {
-        trajectory_file = argv[4];
-        save_trajectory = true;
+        mask_path = argv[4];
+        use_mask = true;
+        cout << "Loading mask from: " << mask_path << endl;
+        mask = cv::imread(mask_path, cv::IMREAD_GRAYSCALE);
+        if (mask.empty()) {
+            cerr << "Failed to load mask image from: " << mask_path << endl;
+            return 1;
+        }
+        cout << "Mask dimensions: " << mask.size() << endl;
+        cout << "Mask type: " << mask.type() << endl;
+        cout << "Mask channels: " << mask.channels() << endl;
+        
+        // Print some basic mask statistics
+        int total_pixels = mask.rows * mask.cols;
+        int white_pixels = cv::countNonZero(mask);
+        int black_pixels = total_pixels - white_pixels;
+        cout << "Total pixels: " << total_pixels << endl;
+        cout << "White pixels (regions of interest): " << white_pixels << " (" << (white_pixels * 100.0 / total_pixels) << "%)" << endl;
+        cout << "Black pixels (masked/ignored regions): " << black_pixels << " (" << (black_pixels * 100.0 / total_pixels) << "%)" << endl;
     }
+
+    // 选择mask使用方式: 
+    // true: 将mask直接应用于图像，然后将处理后的图像传给SLAM系统
+    // false: 将mask直接传给SLAM系统，由系统内部处理mask（默认方式）
+    bool apply_mask_to_image = true;
+    
+    cout << "Mask usage mode: " << (apply_mask_to_image ? "Apply to image before SLAM" : "Pass to SLAM system") << endl;
 
     // Load RGB-D and IMU data from H5 file
     OrbbecData data;
@@ -556,7 +581,10 @@ int main(int argc, char **argv) {
 
     // Create SLAM system
     cout << "Creating ORB-SLAM3 RGBD-Inertial system..." << endl;
-    ORB_SLAM3::System SLAM(voc_path, settings_path, ORB_SLAM3::System::IMU_RGBD, true, 0, trajectory_file);
+    ORB_SLAM3::System SLAM(voc_path, settings_path, ORB_SLAM3::System::IMU_RGBD, false);
+    // 设置Verbose级别为DEBUG
+    ORB_SLAM3::Verbose::SetTh(ORB_SLAM3::Verbose::VERBOSITY_DEBUG);
+
     float imageScale = SLAM.GetImageScale();
 
     // Vector for tracking time statistics
@@ -623,7 +651,35 @@ int main(int argc, char **argv) {
             cerr << "Warning: Insufficient IMU measurements (" << vImuMeas.size() << "), break loop" << endl;
             break;
         }
-        SLAM.TrackRGBD(im, depth, tframe, vImuMeas);
+        if (use_mask) {
+            if (apply_mask_to_image) {
+                // 方式1: 将mask直接应用于图像，然后将处理后的图像传给SLAM系统
+                cv::Mat masked_im = im.clone();
+                cv::Mat masked_depth = depth.clone();
+                
+                // 只保留mask中为白色(255)的部分，其余部分设为黑色(0)
+                for(int r = 0; r < im.rows; r++) {
+                    for(int c = 0; c < im.cols; c++) {
+                        if(mask.at<uchar>(r, c) == 0) {
+                            if (masked_im.channels() == 3)
+                                masked_im.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+                            else
+                                masked_im.at<uchar>(r, c) = 0;
+                            
+                            masked_depth.at<ushort>(r, c) = 0;
+                        }
+                    }
+                }
+                
+                // 将处理后的图像传给SLAM系统
+                SLAM.TrackRGBD(masked_im, masked_depth, tframe, vImuMeas);
+            } else {
+                // 方式2: 将mask直接传给SLAM系统，由系统内部处理mask
+                SLAM.TrackRGBD(im, depth, mask, tframe, vImuMeas);
+            }
+        } else {
+            SLAM.TrackRGBD(im, depth, tframe, vImuMeas);
+        }
         
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
         double ttrack = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1).count();
@@ -652,17 +708,13 @@ int main(int argc, char **argv) {
             usleep((T-ttrack)*1e6); // Convert seconds to microseconds
     }
 
-    // 手动确保轨迹数据被保存
-    cout << "Forcefully saving trajectory data before shutdown..." << endl;
     // Shutdown SLAM system
     SLAM.Shutdown();
     // Save camera trajectory
-    if (save_trajectory) {
-        SLAM.SaveTrajectoryTUM("RGBD-Inertial-CameraTrajectory.txt");
-        SLAM.SaveKeyFrameTrajectoryTUM("RGBD-Inertial-KeyFrameTrajectory.txt");
-        cout << "Trajectory saved to RGBD-Inertial-CameraTrajectory.txt" << endl;
-        cout << "Key frames saved to RGBD-Inertial-KeyFrameTrajectory.txt" << endl;
-    }
+    SLAM.SaveTrajectoryTUM("RGBD-Inertial-CameraTrajectory.txt");
+    SLAM.SaveKeyFrameTrajectoryTUM("RGBD-Inertial-KeyFrameTrajectory.txt");
+    cout << "Trajectory saved to RGBD-Inertial-CameraTrajectory.txt" << endl;
+    cout << "Key frames saved to RGBD-Inertial-KeyFrameTrajectory.txt" << endl;
 
     cout << "Done!" << endl;
     return 0;

@@ -9,6 +9,7 @@
 
 logs/
 mav0/
+temp/
 
 CMakeLists.txt.user
 CMakeLists_modified.txt

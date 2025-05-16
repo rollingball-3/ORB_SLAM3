@@ -1,0 +1,116 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "g++ - Build and debug active file",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",                          // 新增调试器模式
+            "miDebuggerPath": "/usr/bin/gdb",    
+        },
+        {
+            "name": "Debug orbbec_bgrd with mask",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Examples/RGB-D/orbbec_bgrd",
+            "args": [
+                "/data/public/datasets/tactile/anyskin_hand2/001/orbbec.h5",
+                "${workspaceFolder}/Vocabulary/ORBvoc.txt",
+                "${workspaceFolder}/Examples/RGB-D/orbbec.yaml",
+                "${workspaceFolder}/Examples/RGB-D/mask.png"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug orbbec_bgrd",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Examples/RGB-D/orbbec_bgrd",
+            "args": [
+                "/data/public/datasets/tactile/anyskin_hand2/slam/orbbec.h5",
+                "${workspaceFolder}/Vocabulary/ORBvoc.txt",
+                "${workspaceFolder}/Examples/RGB-D/orbbec.yaml"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug orbbec_bgrd_inertial with mask",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Examples/RGB-D/orbbec_bgrd_inertial",
+            "args": [
+                "/data/public/datasets/tactile/anyskin_hand2/001/orbbec.h5",
+                "${workspaceFolder}/Vocabulary/ORBvoc.txt",
+                "${workspaceFolder}/Examples/RGB-D/orbbec.yaml",
+                "${workspaceFolder}/Examples/RGB-D/mask.png"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug orbbec_bgrd_inertial",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Examples/RGB-D/orbbec_bgrd_inertial",
+            "args": [
+                "/data/public/datasets/tactile/anyskin_hand2/slam/orbbec.h5",
+                "${workspaceFolder}/Vocabulary/ORBvoc.txt",
+                "${workspaceFolder}/Examples/RGB-D/orbbec.yaml"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

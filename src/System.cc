@@ -331,7 +331,7 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
     {
         cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
         exit(-1);
-    }
+    }    
 
     cv::Mat imToFeed = im.clone();
     cv::Mat imDepthToFeed = depthmap.clone();
@@ -391,8 +391,88 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
 
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;
+    cout << "Tracking state: " << mTrackingState << endl;
     mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
+    cout << "Tracked map points: " << mTrackedMapPoints.size() << endl;
     mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+    cout << "Tracked key points: " << mTrackedKeyPointsUn.size() << endl;
+    return Tcw;
+}
+
+Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const cv::Mat &mask, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
+{
+    if(mSensor!=RGBD  && mSensor!=IMU_RGBD)
+    {
+        cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
+        exit(-1);
+    }    
+
+    cv::Mat imToFeed = im.clone();
+    cv::Mat imDepthToFeed = depthmap.clone();
+    cv::Mat maskToFeed = mask.clone();
+    
+    if(settings_ && settings_->needToResize()){
+        cv::Mat resizedIm;
+        cv::resize(im,resizedIm,settings_->newImSize());
+        imToFeed = resizedIm;
+
+        cv::resize(depthmap,imDepthToFeed,settings_->newImSize());
+        cv::resize(mask,maskToFeed,settings_->newImSize(), 0, 0, cv::INTER_NEAREST);
+    }
+
+    // Check mode change
+    {
+        unique_lock<mutex> lock(mMutexMode);
+        if(mbActivateLocalizationMode)
+        {
+            mpLocalMapper->RequestStop();
+
+            // Wait until Local Mapping has effectively stopped
+            while(!mpLocalMapper->isStopped())
+            {
+                usleep(1000);
+            }
+
+            mpTracker->InformOnlyTracking(true);
+            mbActivateLocalizationMode = false;
+        }
+        if(mbDeactivateLocalizationMode)
+        {
+            mpTracker->InformOnlyTracking(false);
+            mpLocalMapper->Release();
+            mbDeactivateLocalizationMode = false;
+        }
+    }
+
+    // Check reset
+    {
+        unique_lock<mutex> lock(mMutexReset);
+        if(mbReset)
+        {
+            mpTracker->Reset();
+            mbReset = false;
+            mbResetActiveMap = false;
+        }
+        else if(mbResetActiveMap)
+        {
+            mpTracker->ResetActiveMap();
+            mbResetActiveMap = false;
+        }
+    }
+
+    if (mSensor == System::IMU_RGBD)
+        for(size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
+            mpTracker->GrabImuData(vImuMeas[i_imu]);
+    Sophus::SE3f Tcw = mpTracker->GrabImageRGBD(imToFeed,imDepthToFeed,maskToFeed,timestamp,filename);
+
+    unique_lock<mutex> lock2(mMutexState);
+    mTrackingState = mpTracker->mState;
+    cout << "Tracking state: " << mTrackingState << endl;
+    mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
+    cout << "Tracked map points: " << mTrackedMapPoints.size() << endl;
+    mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
+    cout << "Tracked key points: " << mTrackedKeyPointsUn.size() << endl;
+    
     return Tcw;
 }
 

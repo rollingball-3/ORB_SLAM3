@@ -304,7 +304,8 @@ bool MapPoint::isBad()
     unique_lock<mutex> lock1(mMutexFeatures,std::defer_lock);
     unique_lock<mutex> lock2(mMutexPos,std::defer_lock);
     lock(lock1, lock2);
-
+    // unique_lock<mutex> lock1(mMutexFeatures);
+    // unique_lock<mutex> lock2(mMutexPos);
     return mbBad;
 }
 

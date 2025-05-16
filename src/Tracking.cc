@@ -1545,11 +1545,6 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
     else if(mSensor == System::IMU_RGBD)
         mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib);
 
-
-
-
-
-
     mCurrentFrame.mNameFile = filename;
     mCurrentFrame.mnDataset = mnNumDataset;
 
@@ -1558,6 +1553,46 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
 #endif
 
     Track();
+
+    return mCurrentFrame.GetPose();
+}
+
+Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const cv::Mat &mask, const double &timestamp, string filename)
+{
+    mImGray = imRGB;
+    cv::Mat imDepth = imD;
+
+    if(mImGray.channels()==3)
+    {
+        if(mbRGB)
+            cvtColor(mImGray,mImGray,cv::COLOR_RGB2GRAY);
+        else
+            cvtColor(mImGray,mImGray,cv::COLOR_BGR2GRAY);
+    }
+    else if(mImGray.channels()==4)
+    {
+        if(mbRGB)
+            cvtColor(mImGray,mImGray,cv::COLOR_RGBA2GRAY);
+        else
+            cvtColor(mImGray,mImGray,cv::COLOR_BGRA2GRAY);
+    }
+
+    if((fabs(mDepthMapFactor-1.0f)>1e-5) || imDepth.type()!=CV_32F)
+        imDepth.convertTo(imDepth,CV_32F,mDepthMapFactor);
+
+    if (mSensor == System::RGBD)
+        mCurrentFrame = Frame(mImGray,imDepth,mask,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera);
+    else if(mSensor == System::IMU_RGBD)
+        mCurrentFrame = Frame(mImGray,imDepth,mask,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib);
+    mCurrentFrame.mNameFile = filename;
+    mCurrentFrame.mnDataset = mnNumDataset;
+
+#ifdef REGISTER_TIMES
+    vdORBExtract_ms.push_back(mCurrentFrame.mTimeORB_Ext);
+#endif
+    std::cout << "before track" << std::endl;
+    Track();
+    std::cout << "after track" << std::endl;
 
     return mCurrentFrame.GetPose();
 }
@@ -1881,12 +1916,9 @@ void Tracking::Track()
 
     }
     mbCreatedMap = false;
-
     // Get Map Mutex -> Map cannot be changed
     unique_lock<mutex> lock(pCurrentMap->mMutexMapUpdate);
-
     mbMapUpdated = false;
-
     int nCurMapChangeIndex = pCurrentMap->GetMapChangeIndex();
     int nMapChangeIndex = pCurrentMap->GetLastMapChange();
     if(nCurMapChangeIndex>nMapChangeIndex)
@@ -1894,7 +1926,6 @@ void Tracking::Track()
         pCurrentMap->SetLastMapChange(nCurMapChangeIndex);
         mbMapUpdated = true;
     }
-
 
     if(mState==NOT_INITIALIZED)
     {
@@ -1965,7 +1996,7 @@ void Tracking::Track()
                     }
                     else if(pCurrentMap->KeyFramesInMap()>10)
                     {
-                        // cout << "KF in map: " << pCurrentMap->KeyFramesInMap() << endl;
+                        cout << "KF in map: " << pCurrentMap->KeyFramesInMap() << endl;
                         mState = RECENTLY_LOST;
                         mTimeStampLost = mCurrentFrame.mTimeStamp;
                     }
@@ -2128,7 +2159,9 @@ void Tracking::Track()
 
             }
             if(!bOK)
-                cout << "Fail to track local map!" << endl;
+                cout << "Fail to track local map! mnMatchesInliers=" << mnMatchesInliers 
+                     << ", threshold=" << (mSensor == System::IMU_RGBD ? 15 : 30) 
+                     << ", mState=" << mState << endl;
         }
         else
         {
@@ -3027,8 +3060,11 @@ bool Tracking::TrackLocalMap()
     // Decide if the tracking was succesful
     // More restrictive if there was a relocalization recently
     mpLocalMapper->mnMatchesInliers=mnMatchesInliers;
-    if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50)
+    if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50) {
+        cout << "TrackLocalMap failed: Too few matches after relocalization " 
+             << mnMatchesInliers << " < 50" << endl;
         return false;
+    }
 
     if((mnMatchesInliers>10)&&(mState==RECENTLY_LOST))
         return true;
@@ -3038,6 +3074,10 @@ bool Tracking::TrackLocalMap()
     {
         if((mnMatchesInliers<15 && mpAtlas->isImuInitialized())||(mnMatchesInliers<50 && !mpAtlas->isImuInitialized()))
         {
+            cout << "TrackLocalMap failed: IMU_MONOCULAR with too few matches " 
+                 << mnMatchesInliers << " < " 
+                 << (mpAtlas->isImuInitialized() ? 15 : 50) 
+                 << ", IMU initialized: " << mpAtlas->isImuInitialized() << endl;
             return false;
         }
         else
@@ -3047,6 +3087,8 @@ bool Tracking::TrackLocalMap()
     {
         if(mnMatchesInliers<15)
         {
+            cout << "TrackLocalMap failed: IMU_STEREO/IMU_RGBD with too few matches " 
+                 << mnMatchesInliers << " < 15" << endl;
             return false;
         }
         else
@@ -3054,8 +3096,11 @@ bool Tracking::TrackLocalMap()
     }
     else
     {
-        if(mnMatchesInliers<30)
+        if(mnMatchesInliers<30) {
+            cout << "TrackLocalMap failed: Non-IMU sensor with too few matches " 
+                 << mnMatchesInliers << " < 30" << endl;
             return false;
+        }
         else
             return true;
     }
@@ -3411,6 +3456,7 @@ void Tracking::SearchLocalPoints()
             th=15; // 15
 
         int matches = matcher.SearchByProjection(mCurrentFrame, mvpLocalMapPoints, th, mpLocalMapper->mbFarPoints, mpLocalMapper->mThFarPoints);
+        cout << "SearchLocalPoints: Attempted to match " << nToMatch << " points with threshold " << th << ", found " << matches << " matches" << endl;
     }
 }
 
